@@ -1,8 +1,7 @@
-ARG VERSION=5.4.3
-
 # Modified from https://github.com/grafana/grafana to use arm32v6 base images and alpine commands
 
 FROM arm32v6/alpine:3.8 as sources
+ARG VERSION=5.4.3
 WORKDIR /src/grafana
 RUN wget https://github.com/grafana/grafana/archive/v${VERSION}.tar.gz && tar xzf v${VERSION}.tar.gz
 
