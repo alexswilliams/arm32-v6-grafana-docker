@@ -1,0 +1,62 @@
+ARG VERSION=5.4.3
+
+# Modified from https://github.com/grafana/grafana to use arm32v6 base images and alpine commands
+
+FROM arm32v6/alpine:3.8 as sources
+WORKDIR /src/grafana
+RUN wget https://github.com/grafana/grafana/archive/v${VERSION}.tar.gz && tar xzf v${VERSION}.tar.gz
+
+FROM arm32v6/golang:1.11-alpine as backend
+RUN apk add --no-cache git
+WORKDIR $GOPATH/src/github.com/grafana/grafana
+COPY --from=sources /src/grafana/Gopkg.toml /src/grafana/Gopkg.lock ./
+COPY --from=sources /src/grafana/vendor vendor
+RUN go get -u github.com/golang/dep/cmd/dep && dep ensure --vendor-only
+COPY --from=sources /src/grafana/pkg pkg
+COPY --from=sources /src/grafana/build.go build.go
+COPY --from=sources /src/grafana/package.json package.json
+RUN go run build.go build
+
+FROM arm32v6/node:8-alpine as frontend
+WORKDIR /usr/src/app/
+COPY --from=sources /src/grafana/package.json /src/grafana/yarn.lock ./
+RUN yarn install --pure-lockfile --no-progress
+COPY --from=sources /src/grafana/Gruntfile.js /src/grafana/tsconfig.json /src/grafana/tslint.json ./
+COPY --from=sources /src/grafana/public public
+COPY --from=sources /src/grafana/scripts scripts
+COPY --from=sources /src/grafana/emails emails
+ENV NODE_ENV production
+RUN ./node_modules/.bin/grunt build
+
+FROM arm32v6/alpine:3.8
+ARG GF_UID="472"
+ARG GF_GID="472"
+ENV GF_PATHS_CONFIG="/etc/grafana/grafana.ini" \
+    GF_PATHS_DATA="/var/lib/grafana" \
+    GF_PATHS_HOME="/usr/share/grafana" \
+    GF_PATHS_LOGS="/var/log/grafana" \
+    GF_PATHS_PLUGINS="/var/lib/grafana/plugins" \
+    GF_PATHS_PROVISIONING="/etc/grafana/provisioning"
+WORKDIR $GF_PATHS_HOME
+RUN apk add --no-cache fontconfig ca-certificates
+COPY --from=sources /src/grafana/conf ./conf
+RUN mkdir -p "$GF_PATHS_HOME/.aws" && \
+    addgroup -S -g $GF_GID grafana && \
+    adduser -S -u $GF_UID -G grafana grafana && \
+    mkdir -p "$GF_PATHS_PROVISIONING/datasources" \
+             "$GF_PATHS_PROVISIONING/dashboards" \
+             "$GF_PATHS_LOGS" \
+             "$GF_PATHS_PLUGINS" \
+             "$GF_PATHS_DATA" && \
+    cp "$GF_PATHS_HOME/conf/sample.ini" "$GF_PATHS_CONFIG" && \
+    cp "$GF_PATHS_HOME/conf/ldap.toml" /etc/grafana/ldap.toml && \
+    chown -R grafana:grafana "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" && \
+    chmod 777 "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS"
+COPY --from=backend /go/src/github.com/grafana/grafana/bin/linux-amd64/grafana-server /go/src/github.com/grafana/grafana/bin/linux-amd64/grafana-cli ./bin/
+COPY --from=frontend /usr/src/app/public ./public
+COPY --from=frontend /usr/src/app/tools ./tools
+COPY tools/phantomjs/render.js ./tools/phantomjs/render.js
+EXPOSE 3000
+COPY ./packaging/docker/run.sh /run.sh
+USER grafana
+ENTRYPOINT [ "/run.sh" ]
