@@ -13,16 +13,17 @@ RUN apk add --no-cache git build-base
 WORKDIR $GOPATH/src/github.com/grafana/grafana
 COPY --from=sources /src/grafana/Gopkg.toml /src/grafana/Gopkg.lock ./
 COPY --from=sources /src/grafana/vendor vendor
-# RUN go get -u github.com/golang/dep/cmd/dep && dep ensure --vendor-only
 COPY --from=sources /src/grafana/pkg pkg
 COPY --from=sources /src/grafana/build.go build.go
 COPY --from=sources /src/grafana/package.json package.json
+RUN go get -u github.com/golang/dep/cmd/dep
+RUN dep ensure --vendor-only
 RUN go run build.go build
 
 FROM arm32v6/node:8-alpine as frontend
 WORKDIR /usr/src/app/
 COPY --from=sources /src/grafana/package.json /src/grafana/yarn.lock ./
-RUN yarn install --pure-lockfile --no-progress
+RUN yarn install --pure-lockfile --no-progress --network-concurrency 1 --non-interactive
 COPY --from=sources /src/grafana/Gruntfile.js /src/grafana/tsconfig.json /src/grafana/tslint.json ./
 COPY --from=sources /src/grafana/public public
 COPY --from=sources /src/grafana/scripts scripts
