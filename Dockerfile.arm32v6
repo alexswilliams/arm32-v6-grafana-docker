@@ -1,9 +1,12 @@
 # Modified from https://github.com/grafana/grafana to use arm32v6 base images and alpine commands
 
 FROM arm32v6/alpine:3.8 as sources
-ARG VERSION=5.4.3
+ARG VERSION
 WORKDIR /src/grafana
-RUN wget https://github.com/grafana/grafana/archive/v${VERSION}.tar.gz && tar xzf v${VERSION}.tar.gz
+RUN wget https://github.com/grafana/grafana/archive/v${VERSION}.tar.gz \
+    && tar xzf v${VERSION}.tar.gz \
+    && mv /src/grafana/grafana-${VERSION}/* /src/grafana/ \
+    && rm -f v${VERSION}.tar.gz
 
 FROM arm32v6/golang:1.11-alpine as backend
 RUN apk add --no-cache git
