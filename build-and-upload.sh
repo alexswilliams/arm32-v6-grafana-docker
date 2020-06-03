@@ -2,6 +2,8 @@
 
 set -ex
 
+export DOCKER_BUILDKIT=1
+
 function buildAndPush {
     local grafanaVersion=$1
     local alpineVersion=$2
@@ -9,10 +11,7 @@ function buildAndPush {
     local latest="last-build"
     if [ "$3" == "latest" ]; then latest="latest"; fi
 
-    DOCKER_BUILDKIT=1 \
     docker build \
-        --no-cache=true \
-        --progress=plain \
         --platform=linux/arm/v6 \
         --build-arg GRAFANA_VERSION=${grafanaVersion} \
         --build-arg ALPINE_VERSION=${alpineVersion} \
@@ -22,7 +21,10 @@ function buildAndPush {
         --tag ${imagename}:${grafanaVersion}-${alpineVersion} \
         --tag ${imagename}:${latest} \
         --file Dockerfile .
-#        --push \
+
+#    docker push ${imagename}:${grafanaVersion}
+#    docker push ${imagename}:${grafanaVersion}-${alpineVersion}
+#    docker push ${imagename}:${latest}
 }
 
 buildAndPush "7.0.3" "3.12.0" latest
