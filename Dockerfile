@@ -1,7 +1,17 @@
-# Modified from https://github.com/grafana/grafana/blob/master/packaging/docker/Dockerfile to use arm32v6 base images and alpine commands
+# Modified from https://github.com/grafana/grafana/blob/master/Dockerfile to use arm32v6 base images and alpine commands
 
 ARG ALPINE_VERSION
-FROM arm32v6/alpine:${ALPINE_VERSION} as binaries
+ARG GO_VERSION
+
+FROM arm32v6/alpine:${ALPINE_VERSION} as sourcecode
+ARG GRAFANA_VERSION
+RUN wget https://github.com/grafana/grafana/archive/v${GRAFANA_VERSION}.tar.gz \
+    && tar xzf v${GRAFANA_VERSION}.tar.gz \
+    && mv /grafana-${GRAFANA_VERSION} /grafana
+
+
+FROM arm32v6/alpine:${ALPINE_VERSION} as prebuilt
+ARG GRAFANA_VERSION
 WORKDIR /
 ARG GRAFANA_VERSION
 RUN wget https://dl.grafana.com/oss/release/grafana-${GRAFANA_VERSION}.linux-armv6.tar.gz \
@@ -9,12 +19,25 @@ RUN wget https://dl.grafana.com/oss/release/grafana-${GRAFANA_VERSION}.linux-arm
     && mv /grafana-${GRAFANA_VERSION} /grafana
 
 
-ARG ALPINE_VERSION
-FROM arm32v6/alpine:${ALPINE_VERSION}
-ARG GRAFANA_VERSION
+
+FROM arm32v6/golang:${GO_VERSION} as go-builder
+RUN apk add --no-cache gcc g++
+WORKDIR $GOPATH/src/github.com/grafana/grafana
+
+COPY --from=sourcecode /grafana/go.mod /grafana/go.sum ./
+RUN go mod verify
+RUN go mod download
+
+COPY --from=sourcecode /grafana/pkg pkg
+COPY --from=sourcecode /grafana/build.go /grafana/package.json ./
+RUN go run build.go build --goarch=armv6
+
+
+
+FROM arm32v6/alpine:${ALPINE_VERSION} as runtime
 ARG GF_UID="472"
 ARG GF_GID="472"
-ENV PATH=/usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+ENV PATH="/usr/share/grafana/bin:$PATH" \
     GF_PATHS_CONFIG="/etc/grafana/grafana.ini" \
     GF_PATHS_DATA="/var/lib/grafana" \
     GF_PATHS_HOME="/usr/share/grafana" \
@@ -24,7 +47,10 @@ ENV PATH=/usr/share/grafana/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bi
 
 WORKDIR $GF_PATHS_HOME
 
-COPY --from=binaries /grafana ${GF_PATHS_HOME}
+RUN apk add --no-cache ca-certificates bash tzdata && \
+    apk add --no-cache --upgrade openssl musl-utils
+
+COPY --from=sourcecode /grafana/conf ./conf
 
 RUN mkdir -p "$GF_PATHS_HOME/.aws" && \
     addgroup -S -g $GF_GID grafana && \
@@ -37,14 +63,17 @@ RUN mkdir -p "$GF_PATHS_HOME/.aws" && \
              "$GF_PATHS_DATA" && \
     cp "$GF_PATHS_HOME/conf/sample.ini" "$GF_PATHS_CONFIG" && \
     cp "$GF_PATHS_HOME/conf/ldap.toml" /etc/grafana/ldap.toml && \
-    chown -R grafana:grafana "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" && \
-    chmod 777 "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" && \
-    apk add --no-cache fontconfig ca-certificates
+    chown -R grafana:grafana "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" "$GF_PATHS_PROVISIONING" && \
+    chmod -R 777 "$GF_PATHS_DATA" "$GF_PATHS_HOME/.aws" "$GF_PATHS_LOGS" "$GF_PATHS_PLUGINS" "$GF_PATHS_PROVISIONING"
 
-ADD https://raw.githubusercontent.com/grafana/grafana/master/packaging/docker/run.sh /run.sh
-RUN sed -i 's#/bin/bash#/bin/sh#' /run.sh \
-    && chmod 0755 /run.sh
+COPY --from=go-builder /go/src/github.com/grafana/grafana/bin/linux-amd64/grafana-server /go/src/github.com/grafana/grafana/bin/linux-amd64/grafana-cli ./bin/
+COPY --from=prebuilt /grafana/public ./public
+# COPY --from=js-builder /usr/src/app/tools ./tools
+
 EXPOSE 3000
+
+COPY --from=sourcecode /grafana/packaging/docker/run.sh /run.sh
+
 USER grafana
 ENTRYPOINT [ "/run.sh" ]
 
