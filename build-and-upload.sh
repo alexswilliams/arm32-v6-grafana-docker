@@ -19,22 +19,19 @@ function buildAndPush {
         --build-arg GO_VERSION=${goVersion} \
         --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
         --build-arg VCS_REF=$(git rev-parse --short HEAD) \
-        --tag ${imagename}:${grafanaVersion}-alpha \
-        --tag ${imagename}:${grafanaVersion}-${alpineVersion}-alpha \
-        --tag ${imagename}:${grafanaVersion}-${alpineVersion}-${goVersion}-alpha \
-        --tag ${imagename}:${latest}-alpha \
+        --tag ${imagename}:${grafanaVersion} \
+        --tag ${imagename}:${grafanaVersion}-${alpineVersion} \
+        --tag ${imagename}:${grafanaVersion}-${alpineVersion}-${goVersion} \
+        --tag ${imagename}:${latest} \
         --file Dockerfile .
 
-    docker push ${imagename}:${grafanaVersion}-alpha
-    docker push ${imagename}:${grafanaVersion}-${alpineVersion}-alpha
-    docker push ${imagename}:${grafanaVersion}-${alpineVersion}-${goVersion}-alpha
-    docker push ${imagename}:${latest}-alpha
+    docker push ${imagename}:${grafanaVersion}
+    docker push ${imagename}:${grafanaVersion}-${alpineVersion}
+    docker push ${imagename}:${grafanaVersion}-${alpineVersion}-${goVersion}
+    docker push ${imagename}:${latest}
 }
 
-#buildAndPush "7.0.0" "3.12.0" "1.14.2-alpine3.11"
-#buildAndPush "7.0.1" "3.12.0" "1.14.2-alpine3.11"
-#buildAndPush "7.0.2" "3.12.0" "1.14.2-alpine3.11"
 buildAndPush "7.0.3" "3.12.0"  "1.14.2-alpine3.11" latest
 
 
-# curl -X POST "https://hooks.microbadger.com/images/alexswilliams/arm32v6-grafana/GWMYS1iqVhxm1h7lTOo8AK6Qx1w="
+curl -X POST "https://hooks.microbadger.com/images/alexswilliams/arm32v6-grafana/GWMYS1iqVhxm1h7lTOo8AK6Qx1w="
