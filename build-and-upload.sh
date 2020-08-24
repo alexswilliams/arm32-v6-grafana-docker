@@ -35,7 +35,8 @@ function buildAndPush {
 # Grafana version       # Alpine version        # Go version
 
 # buildAndPush "7.0.3" "3.12.0"  "1.14.2-alpine3.11"
-buildAndPush "7.1.0" "3.12.0"  "1.14.6-alpine3.12" latest
+# buildAndPush "7.1.0" "3.12.0"  "1.14.6-alpine3.12"
+buildAndPush "7.1.4" "3.12.0"  "1.15.0-alpine3.12" latest
 
 
 curl -X POST "https://hooks.microbadger.com/images/alexswilliams/arm32v6-grafana/GWMYS1iqVhxm1h7lTOo8AK6Qx1w="
