@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:experimental
 # Modified from https://github.com/grafana/grafana/blob/master/Dockerfile to use arm32v6 base images and alpine commands
 
 ARG ALPINE_VERSION
@@ -26,7 +27,7 @@ WORKDIR $GOPATH/src/github.com/grafana/grafana
 
 COPY --from=sourcecode /grafana/go.mod /grafana/go.sum ./
 RUN go mod verify
-RUN go mod download
+RUN --mount=type=cache,target=$GOPATH/pkg go mod download
 
 COPY --from=sourcecode /grafana/pkg pkg
 COPY --from=sourcecode /grafana/build.go /grafana/package.json ./
